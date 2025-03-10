@@ -53,6 +53,15 @@
     "variant": "cpp",
     "vector": "cpp",
     "algorithm": "cpp",
-    "fstream": "cpp"
-  }
+    "fstream": "cpp",
+    "iomanip": "cpp",
+    "ostream": "cpp",
+    "condition_variable": "cpp",
+    "numbers": "cpp",
+    "semaphore": "cpp",
+    "span": "cpp",
+    "tuple": "cpp",
+    "codecvt": "cpp"
+  },
+  "C_Cpp.default.compilerPath": "/opt/homebrew/opt/llvm/bin/clang++"
 }
