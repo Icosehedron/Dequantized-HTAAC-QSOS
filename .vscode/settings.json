@@ -61,7 +61,9 @@
     "semaphore": "cpp",
     "span": "cpp",
     "tuple": "cpp",
-    "codecvt": "cpp"
+    "codecvt": "cpp",
+    "dense": "cpp",
+    "list": "cpp"
   },
   "C_Cpp.default.compilerPath": "/opt/homebrew/opt/llvm/bin/clang++"
 }

@@ -1,11 +1,11 @@
 #include <iostream>
-#include <random>
 #include <string>
 #include <fstream>
-#include "/opt/homebrew/opt/eigen/include/eigen3/Eigen/Dense"
 #include "Xorshift32.hpp"
 
 Xorshift32 rng(12345);
+const int num_var = 20;
+const int num_clauses = 600;
 
 int* generate_clause(int num_var){
   int* clause = new int[3];
@@ -40,8 +40,6 @@ std::string generate_max3sat(int num_var, int num_clauses){
 }
 
 int main() {
-  int num_var = 20;
-  int num_clauses = 600;
   std::string name = "v" + std::to_string(num_var) + "c" + std::to_string(num_clauses);
   std::string file_path = "./gen_max3sat/" + name + ".cnf";
 

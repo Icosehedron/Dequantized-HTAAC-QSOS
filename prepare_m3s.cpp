@@ -6,6 +6,8 @@
 #include <vector>
 #include "CSR.hpp"
 
+const std::string path_to_cnf = "./imported_cnfs/Max3Sat_2016/s3v110c700-1.cnf";
+const std::string path_to_problem = "./problem/";
 
 int* checkCNFLine(const std::string& line) {
   std::istringstream iss(line);
@@ -60,10 +62,7 @@ int get_max(int num_clauses, int** max3sat){
   return max;
 }
 
-std::tuple<int, CSR*, int, CSR*> generate_8W_mat(int num_clauses, int** max3sat){
-  int n = get_max(num_clauses, max3sat);
-  std::cout << n << std::endl;
-
+std::tuple<int, CSR*, int, CSR*> generate_8W_mat(int n, int num_clauses, int** max3sat){
   int w_plus = 7*num_clauses; //The contribution is exactly 7/8 for every clause
   CSR* w_minus = new CSR(n+1, n+1);
   int W_plus = num_clauses; //The contribution is exactly 1/8 for every clause
@@ -79,13 +78,13 @@ std::tuple<int, CSR*, int, CSR*> generate_8W_mat(int num_clauses, int** max3sat)
 
     //We will skip symmetrizing w_minus and W_minus because we don't need symmetry for backpropogation, and it also
     //makes it harder to store the matrix because it will become a matrix of floats as oppose to a matrix of ints.
-    (*w_minus).insert(0, i, -i_sgn);
-    (*w_minus).insert(0, j, -j_sgn);
-    (*w_minus).insert(0, k, -k_sgn);
-    (*w_minus).insert(i, j, i_sgn * j_sgn);
-    (*w_minus).insert(i, k, i_sgn * k_sgn);
-    (*w_minus).insert(j, k, j_sgn * k_sgn);
-    (*W_minus).insert((n+1)*0 + i, (n+1)*j + k, -i_sgn * j_sgn * k_sgn);
+    w_minus->insert(0, i, -i_sgn);
+    w_minus->insert(0, j, -j_sgn);
+    w_minus->insert(0, k, -k_sgn);
+    w_minus->insert(i, j, i_sgn * j_sgn);
+    w_minus->insert(i, k, i_sgn * k_sgn);
+    w_minus->insert(j, k, j_sgn * k_sgn);
+    W_minus->insert((n+1)*0 + i, (n+1)*j + k, -i_sgn * j_sgn * k_sgn);
 
     //Even though it is true that we are using one extra dimension than necessary (the zero index has no real purpose),
     //since we are using a Compressed Sparse Row format, the space complexity is still O(num_clauses) regardless of the dimension
@@ -96,49 +95,69 @@ std::tuple<int, CSR*, int, CSR*> generate_8W_mat(int num_clauses, int** max3sat)
 void writeParametersToFile(const std::string &filename, int num_clauses, int** max3sat, int w_plus, int W_plus) {
   std::ofstream file(filename);
   if (!file) {
-      std::cerr << "Error opening file for writing\n";
-      return;
+    std::cerr << "Error opening file for writing\n";
+    return;
   }
+  // Write the path to the CNF file
+  file << path_to_cnf << "\n";
 
   // Write the int value to the file
   file << num_clauses << "\n";
 
   // Write the values of w_plus and W_plus
-  file << w_plus << " " << W_plus << "\n";
+  file << w_plus << "\n";
+  file << W_plus << "\n";
 
   // Write the 2D array data
   for (int i = 0; i < num_clauses; ++i) {
-      for (int j = 0; j < 3; ++j) {
-          file << max3sat[i][j] << " ";
-      }
-      file << "\n"; // End of a row
+    for (int j = 0; j < 3; ++j) {
+      file << max3sat[i][j] << " ";
+    }
+    file << "\n"; // End of a row
+  }
+
+  file.close();
+}
+
+void writePopulationsToFile(const std::string &filename, int* populations, int size) {
+  std::ofstream file(filename);
+  if (!file) {
+    std::cerr << "Error opening file for writing\n";
+    return;
+  }
+
+  // Write the population data
+  for (int i = 0; i < size; i++) {
+    file << populations[i] << " ";
   }
 
   file.close();
 }
 
 int main() {
-  std::pair<int, int**> max3sat = parseExternalCNF("./imported_cnfs/Max3Sat_2016/s3v110c700-1.cnf");
+  std::pair<int, int**> max3sat = parseExternalCNF(path_to_cnf);
   if(max3sat.second == nullptr){return 1;}
+  int n = get_max(max3sat.first, max3sat.second);
 
-  int* v1 = new int[max3sat.first];
-  int* v2 = new int[max3sat.first];
-  int* v3 = new int[max3sat.first];
-  for(int i = 0; i < max3sat.first; i++){
-    v1[i] = max3sat.second[i][0];
-    v2[i] = max3sat.second[i][1];
-    v3[i] = max3sat.second[i][2];
-  }
-
-  std::tuple<int, CSR*, int, CSR*> W_matrices = generate_8W_mat(max3sat.first, max3sat.second);
+  std::tuple<int, CSR*, int, CSR*> W_matrices = generate_8W_mat(n, max3sat.first, max3sat.second);
   int w_plus = std::get<0>(W_matrices);
   CSR* w_minus = std::get<1>(W_matrices);
   int W_plus = std::get<2>(W_matrices);
   CSR* W_minus = std::get<3>(W_matrices);
 
-  writeParametersToFile("./problem/parameters.txt", max3sat.first, max3sat.second, w_plus, W_plus);
-  (*w_minus).writeToFile("./problem/w_minus_2d.bin");
-  (*W_minus).writeToFile("./problem/W_minus_4d.bin");
+  writeParametersToFile(path_to_problem + "parameters.txt", max3sat.first, max3sat.second, w_plus, W_plus);
+  w_minus->writeToFile(path_to_problem + "w_minus_2d.bin");
+  W_minus->writeToFile(path_to_problem + "W_minus_4d.bin");
+
+  int* populations = new int[n+1];
+  populations[0] = n+1;
+  for(int i = 0; i<max3sat.first; i++){
+    for(int j = 0; j<3; j++){
+      populations[std::max(max3sat.second[i][j], -max3sat.second[i][j])] += 1;
+    }
+  }
+
+  writePopulationsToFile(path_to_problem + "populations.txt", populations, n+1);
   
   return 0;
 }
