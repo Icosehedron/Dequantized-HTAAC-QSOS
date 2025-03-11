@@ -4,7 +4,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include "CSR.hpp"
+#include "sparse_tensor.hpp"
 
 const std::string path_to_cnf = "./imported_cnfs/Max3Sat_2016/s3v110c700-1.cnf";
 const std::string path_to_problem = "./problem/";
@@ -62,11 +62,11 @@ int get_max(int num_clauses, int** max3sat){
   return max;
 }
 
-std::tuple<int, CSR*, int, CSR*> generate_8W_mat(int n, int num_clauses, int** max3sat){
+std::tuple<int, SparseTensor*, int, SparseTensor*> generate_8W_mat(int n, int num_clauses, int** max3sat){
   int w_plus = 7*num_clauses; //The contribution is exactly 7/8 for every clause
-  CSR* w_minus = new CSR(n+1, n+1);
+  SparseTensor* w_minus = new SparseTensor(n+1, 2);
   int W_plus = num_clauses; //The contribution is exactly 1/8 for every clause
-  CSR* W_minus = new CSR((n+1)*(n+1), (n+1)*(n+1)); //The term y_ay_by_cy_d is stored at CSR.get((n+1)*a + b, (n+1)*c+ d)
+  SparseTensor* W_minus = new SparseTensor(n+1, 4);
 
   for(int r = 0; r<num_clauses; r++){
     int i = std::max(max3sat[r][0], -max3sat[r][0]);
@@ -78,13 +78,13 @@ std::tuple<int, CSR*, int, CSR*> generate_8W_mat(int n, int num_clauses, int** m
 
     //We will skip symmetrizing w_minus and W_minus because we don't need symmetry for backpropogation, and it also
     //makes it harder to store the matrix because it will become a matrix of floats as oppose to a matrix of ints.
-    w_minus->insert(0, i, -i_sgn);
-    w_minus->insert(0, j, -j_sgn);
-    w_minus->insert(0, k, -k_sgn);
-    w_minus->insert(i, j, i_sgn * j_sgn);
-    w_minus->insert(i, k, i_sgn * k_sgn);
-    w_minus->insert(j, k, j_sgn * k_sgn);
-    W_minus->insert((n+1)*0 + i, (n+1)*j + k, -i_sgn * j_sgn * k_sgn);
+    w_minus->insert(new int[2]{0, i}, -i_sgn);
+    w_minus->insert(new int[2]{0, j}, -j_sgn);
+    w_minus->insert(new int[2]{0, k}, -k_sgn);
+    w_minus->insert(new int[2]{i, j}, i_sgn * j_sgn);
+    w_minus->insert(new int[2]{i, k}, i_sgn * k_sgn);
+    w_minus->insert(new int[2]{j, k}, j_sgn * k_sgn);
+    W_minus->insert(new int[4]{0, i, j, k}, -i_sgn * j_sgn * k_sgn);
 
     //Even though it is true that we are using one extra dimension than necessary (the zero index has no real purpose),
     //since we are using a Compressed Sparse Row format, the space complexity is still O(num_clauses) regardless of the dimension
@@ -139,15 +139,15 @@ int main() {
   if(max3sat.second == nullptr){return 1;}
   int n = get_max(max3sat.first, max3sat.second);
 
-  std::tuple<int, CSR*, int, CSR*> W_matrices = generate_8W_mat(n, max3sat.first, max3sat.second);
+  std::tuple<int, SparseTensor*, int, SparseTensor*> W_matrices = generate_8W_mat(n, max3sat.first, max3sat.second);
   int w_plus = std::get<0>(W_matrices);
-  CSR* w_minus = std::get<1>(W_matrices);
+  SparseTensor* w_minus = std::get<1>(W_matrices);
   int W_plus = std::get<2>(W_matrices);
-  CSR* W_minus = std::get<3>(W_matrices);
+  SparseTensor* W_minus = std::get<3>(W_matrices);
 
   writeParametersToFile(path_to_problem + "parameters.txt", max3sat.first, max3sat.second, w_plus, W_plus);
-  w_minus->writeToFile(path_to_problem + "w_minus_2d.bin");
-  W_minus->writeToFile(path_to_problem + "W_minus_4d.bin");
+  w_minus->writeToFile(path_to_problem + "w_minus_2d.txt");
+  W_minus->writeToFile(path_to_problem + "W_minus_4d.txt");
 
   int* populations = new int[n+1];
   populations[0] = n+1;
@@ -158,6 +158,6 @@ int main() {
   }
 
   writePopulationsToFile(path_to_problem + "populations.txt", populations, n+1);
-  
+
   return 0;
 }

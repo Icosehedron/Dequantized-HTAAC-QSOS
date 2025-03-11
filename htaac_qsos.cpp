@@ -4,7 +4,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include "CSR.hpp"
+#include "sparse_tensor.hpp"
 #include "gate_set.hpp"
 #include "/opt/homebrew/Cellar/eigen/3.4.0_1/include/eigen3/Eigen/Dense"
 
@@ -165,11 +165,11 @@ int main() {
   int num_qubits = std::ceil(std::log2(num_Var)); //Number of qubits being used
   int num_dim = std::pow(2, num_qubits); //Number of dimensions in the Hilbert space
 
-  CSR* w_minus = new CSR(0, 0);
-  CSR* W_minus = new CSR(0, 0);
+  SparseTensor* w_minus = new SparseTensor(num_Var, 2);
+  SparseTensor* W_minus = new SparseTensor(num_Var, 4);
 
-  w_minus->readFromFile(name + "w_minus_2d.bin");
-  W_minus->readFromFile(name + "W_minus_4d.bin");
+  w_minus->readFromFile(name + "w_minus_2d.txt");
+  W_minus->readFromFile(name + "W_minus_4d.txt");
 
   std::cout << "Original source path: " << path_to_cnf << std::endl;
   std::cout << "Number of qubits: " << num_qubits << std::endl;
