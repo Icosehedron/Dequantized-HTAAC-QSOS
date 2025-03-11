@@ -5,23 +5,17 @@
 #include <string>
 #include <vector>
 #include "CSR.hpp"
-#include "Xorshift32.hpp"
+#include "gate_set.hpp"
 #include "/opt/homebrew/Cellar/eigen/3.4.0_1/include/eigen3/Eigen/Dense"
 
-Xorshift32 rng(100001); //Will make initialization deterministic
 const std::string name = "./problem/"; //Path to the problem folder (./problem/)
 
 //Hyperparameters for simulation
 const int number_of_epochs = 100; //number of epochs per simulation, you can play with this
 const int number_of_repetitions = 1; //number of repetitions of experiment (full runs). At first, you probably just want 1, but crank it up to more reps to compare an ensemble of random initializations and get general understanding
 
-//Hyperparameters for optimizer (Adam)
-const double lr = 0.001; //Learning rate
-const double adam_beta_1 = 0.9; //Adam default decay rate for momentum
-const double adam_beta_2 = 0.999; //Adam default decay rate for variance
-
 //Circuit hyperparameters
-const int gate_repetitions = 100; //how many time to repeat the gate patern: Rotation Y, CZ-even, Rotation Y, CZ-odd, for more info please see below. You can play with this.
+const int gate_repetitions = 100; //how many time to repeat the [sequence of n(n-1)/2 Lie generators of SO(n)]
 
 /**********************************************
 *                 REMINDER:                   *
@@ -145,6 +139,18 @@ std::pair<int*, int*> synthesizeCZs(int num_qubits, int num_dim) {
   return std::make_pair(CZ0, CZ1);
 }
 
+void ensureNormalization(double* state, int num_dim){
+  double norm = 0;
+  for(int i = 0; i < num_dim; i++){
+    norm += state[i] * state[i];
+  }
+  norm = std::sqrt(norm);
+  for(int i = 0; i < num_dim; i++){
+    state[i] /= norm;
+  }
+  return;
+}
+
 int main() {
   std::tuple<std::string, int, int, int, int**> params = parseParamFile(name + "parameters.txt");
   std::string path_to_cnf = std::get<0>(params);
@@ -196,9 +202,45 @@ int main() {
 
   for(int rep = 0; rep < number_of_repetitions; rep++){
     std::cout << "Repetition " << rep << ": ____________________________________________________" << std::endl;
+    std::vector<RotationLayer*> circuit;
+    for(int i = 0; i < gate_repetitions; i++){
+      circuit.push_back(new RotationLayer(num_qubits));
+    }
 
-    
+    for(int epoch; epoch < number_of_epochs; epoch++){
+      double* state = new double[num_dim];
+      std::fill(state, state + num_dim, 1.0 / std::sqrt(num_dim));
+
+      for(int i = 0; i<gate_repetitions; i++){
+        circuit[i]->feed_forward(state);
+        ensureNormalization(state, num_dim);
+      }
+
+      double pauli_loss = 0;
+      for(int i = 0; i<num_paulis; i++){
+        int pauli = pauliList[i];
+        double expectation_of_pauli_string = 0;
+        for(int j = 0; j<num_dim; j++){
+          expectation_of_pauli_string += __builtin_popcount(pauli ^ j) % 2 == 0 ? state[j]*state[j] : -state[j]*state[j];
+        }
+        pauli_loss += expectation_of_pauli_string * expectation_of_pauli_string;
+      }
+
+      double proper_loss = 0;
+
+      //Calculate proper_loss
+      //Calculate loss
+      //Calculate unrounded, rounded problem solutions and store performance
+      //Backpropagate and update parameters
+    }
+
+    for(int i = 0; i<gate_repetitions; i++){
+      delete circuit[i];
+    }
+    circuit.clear();
   }
+
+  //Plot performance
 
   return 0;
 }
