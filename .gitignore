@@ -1,0 +1,10 @@
+# Ignore macOS system files
+.DS_Store
+
+# Ignore debug symbol files
+*.dSYM
+
+# Ignore CMake build directories
+build/
+cmake-build-debug/
+cmake-build-release/

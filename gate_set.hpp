@@ -70,14 +70,14 @@ struct RotationGate {
 
 struct RotationLayer {
   private:
-    int num_qubits;
+    int num_dim;
     int hilbert_dimension;
     int num_gates;
     std::vector<RotationGate*> gates;
   public:
-  RotationLayer(const int num_qubits, const int gate_repetitions) 
-    : num_qubits(num_qubits) {
-    hilbert_dimension = 1 << num_qubits;
+  RotationLayer(const int num_dim, const int gate_repetitions) 
+    : num_dim(num_dim) {
+    hilbert_dimension = num_dim;
     num_gates = hilbert_dimension * (hilbert_dimension - 1) / 2;
     for (int i = 1; i < hilbert_dimension; i++) {
       for (int j = 0; j + i < hilbert_dimension; j++) {

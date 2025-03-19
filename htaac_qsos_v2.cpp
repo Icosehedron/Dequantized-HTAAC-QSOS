@@ -1,3 +1,8 @@
+//HTAAC-QSOS v2:
+//This is the second version of the HTAAC-QSOS code. It removes the population balancing term and Pauli string constraints
+//in favor a simple constraint-based penalty. This code includes all-necessary tools to switch to a Y-rotation based
+//variational circuit, though it is currently implemented using a product of exponentials of Lie generators.
+
 #include <iostream>
 #include <tuple>
 #include <fstream>
@@ -15,7 +20,7 @@ const std::string diagram_name = "s3v110c700-1";
 
 //Hyperparameters for simulation
 const int number_of_epochs = 100; //number of epochs per simulation, you can play with this
-const int epochs_between_reports = 99;
+const int epochs_between_reports = -1; //Set to -1 to turn off reports
 const int number_of_repetitions = 1; //number of repetitions of experiment (full runs). At first, you probably just want 1, but crank it up to more reps to compare an ensemble of random initializations and get general understanding
 
 //Circuit hyperparameters
@@ -161,12 +166,14 @@ int main() {
   float coeff = coeff_base * num_Var * num_Var;
 
   for(int rep = 0; rep < number_of_repetitions; rep++){
-    std::cout << "Repetition " << rep << ": ____________________________________________________" << std::endl;
+    if(epochs_between_reports > 0){
+      std::cout << "Repetition " << rep << ": ____________________________________________________" << std::endl;
+    }
 
     //Create the circuit in Lie decomposition form
     std::vector<RotationLayer*> circuit;
     for(int i = 0; i < gate_repetitions; i++){
-      circuit.push_back(new RotationLayer(num_qubits, gate_repetitions));
+      circuit.push_back(new RotationLayer(num_dim, gate_repetitions));
     }
 
     for(int epoch; epoch < number_of_epochs; epoch++){
@@ -230,7 +237,7 @@ int main() {
         circuit[i]->update_parameters();
       }
 
-      if(epoch % epochs_between_reports == 0){
+      if(epochs_between_reports > 0 && epoch % epochs_between_reports == 0){
         std::cout << "Epoch number: " << epoch << std::endl;
         std::cout << "State: " << state[0] << " " << state[1] << " " << state[2] << " " << state[3] << std::endl;
         std::cout << "HTAACQSOS (unrounded): " << unrounded_score << std::endl;

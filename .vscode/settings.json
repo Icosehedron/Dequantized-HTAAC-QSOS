@@ -84,7 +84,8 @@
     "text_encoding": "cpp",
     "thread": "cpp",
     "cinttypes": "cpp",
-    "__threading_support": "cpp"
+    "__threading_support": "cpp",
+    "filesystem": "cpp"
   },
   "C_Cpp.default.compilerPath": "/opt/homebrew/opt/llvm/bin/clang++"
 }
