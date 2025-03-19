@@ -8,60 +8,62 @@
 #include "/opt/homebrew/Cellar/eigen/3.4.0_1/include/eigen3/Eigen/Dense"
 
 //Hyperparameters for optimizer (Adam)
-const double adam_lr = 0.001; //Learning rate
-const double adam_beta_1 = 0.9; //Adam default decay rate for momentum
-const double adam_beta_2 = 0.999; //Adam default decay rate for variance
+const float adam_lr_base = 0.001; //Learning rate
+const float adam_beta_1 = 0.9; //Adam default decay rate for momentum
+const float adam_beta_2 = 0.999; //Adam default decay rate for variance
 
 Xorshift32 rng(54321); //Will make initialization deterministic
 
 struct RotationGate {
   private:
-    double rotation_angle;
-    double cos_val;
-    double sin_val;
+    float rotation_angle;
+    float cos_val;
+    float sin_val;
     int index1;
     int index2;
-    double output1 = 0;
-    double output2 = 0;
-    double grad = 0;
-    double adam_momentum = 0;
-    double adam_variance = 0;
+    float adam_lr;
+    float output1 = 0.0f;
+    float output2 = 0.0f;
+    float grad = 0.0f;
+    float adam_momentum = 0.0f;
+    float adam_variance = 0.0f;
     int num_updates = 0;
   public:
   void update_angle(){
-    cos_val = cos(rotation_angle);
-    sin_val = sin(rotation_angle);
+    cos_val = std::cos(rotation_angle);
+    sin_val = std::sin(rotation_angle);
   }
 
-  RotationGate(int index1, int index2) 
+  RotationGate(const int index1, const int index2, const int gate_repetitions) 
     : index1(index1), index2(index2) {
     // Initialize rotation_angle with random angle between 0 and 2*PI radians
     rotation_angle = rng.next_double() * 2 * PI;
+    adam_lr = adam_lr_base / gate_repetitions;
     update_angle();
   }
 
-  void feed_forward(double* state) {
+  void feed_forward(float* state) {
     output1 = cos_val * state[index1] - sin_val * state[index2];
     output2 = sin_val * state[index1] + cos_val * state[index2];
     state[index1] = output1;
     state[index2] = output2;
   }
 
-  void back_propagate(double* output_grad) {
-    double grad1 = output_grad[index1] * cos_val + output_grad[index2] * sin_val;
-    double grad2 = output_grad[index1] * -sin_val + output_grad[index2] * cos_val;
+  void back_propagate(float* output_grad) {
+    float grad1 = output_grad[index1] * cos_val + output_grad[index2] * sin_val;
+    float grad2 = output_grad[index1] * -sin_val + output_grad[index2] * cos_val;
+    grad = output1 * output_grad[index2] -output2 * output_grad[index1];
     output_grad[index1] = grad1;
     output_grad[index2] = grad2;
-    grad = output1 * grad2 - output2 * grad1;
   }
 
   void update_parameters() {
     num_updates += 1;
     adam_momentum = adam_beta_1 * adam_momentum + (1 - adam_beta_1) * grad;
     adam_variance = adam_beta_2 * adam_variance + (1 - adam_beta_2) * grad * grad;
-    double momentum = adam_momentum/(1 - pow(adam_beta_1, num_updates));
-    double variance = adam_variance/(1 - pow(adam_beta_2, num_updates));
-    rotation_angle -= adam_lr * momentum / (sqrt(variance) + 1e-8);
+    float momentum = adam_momentum/(1 - std::pow(adam_beta_1, num_updates));
+    float variance = adam_variance/(1 - std::pow(adam_beta_2, num_updates));
+    rotation_angle -= adam_lr * momentum / (std::sqrt(variance) + 1e-8);
     update_angle();
   }
 };
@@ -69,15 +71,17 @@ struct RotationGate {
 struct RotationLayer {
   private:
     int num_qubits;
+    int hilbert_dimension;
     int num_gates;
     std::vector<RotationGate*> gates;
   public:
-  RotationLayer(int num_qubits) 
+  RotationLayer(const int num_qubits, const int gate_repetitions) 
     : num_qubits(num_qubits) {
-    num_gates = num_qubits * (num_qubits - 1) / 2;
-    for (int i = 0; i < num_qubits; i++) {
-      for (int j = i + 1; j < num_qubits; j++) {
-        gates.push_back(new RotationGate(i, j));
+    hilbert_dimension = 1 << num_qubits;
+    num_gates = hilbert_dimension * (hilbert_dimension - 1) / 2;
+    for (int i = 1; i < hilbert_dimension; i++) {
+      for (int j = 0; j + i < hilbert_dimension; j++) {
+        gates.push_back(new RotationGate(j, j+i, gate_repetitions));
       }
     }
   }
@@ -88,11 +92,11 @@ struct RotationLayer {
     gates.clear();
   }
 
-  void feed_forward(double* state) {
+  void feed_forward(float* state) {
     for(int i = 0; i<num_gates; i++) {gates[i]->feed_forward(state);}
   }
 
-  void back_propagate(double* output_grad) {
+  void back_propagate(float* output_grad) {
     for(int i = num_gates - 1; i>=0; i--){gates[i]->back_propagate(output_grad);}
   }
 

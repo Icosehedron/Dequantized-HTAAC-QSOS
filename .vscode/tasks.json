@@ -2,15 +2,19 @@
   "tasks": [
     {
       "type": "cppbuild",
-      "label": "C/C++: clang++ build active file",
-      "command": "/usr/bin/clang++",
+      "label": "C/C++: clang build active file",
+      "command": "/opt/homebrew/opt/llvm/bin/clang++",
       "args": [
+        "-arch", "arm64",
+        "-std=c++17",
         "-fdiagnostics-color=always",
         "-g",
         "${file}",
-        "-std=c++17",
         "-o",
-        "${fileDirname}/${fileBasenameNoExtension}"
+        "${fileDirname}/${fileBasenameNoExtension}",
+        "-framework",
+        "Accelerate",
+        "-DACCELERATE_NEW_LAPACK"
       ],
       "options": {
         "cwd": "${fileDirname}"

@@ -11,7 +11,11 @@ const std::string path_to_problem = "./problem/";
 
 int* checkCNFLine(const std::string& line) {
   std::istringstream iss(line);
-  std::vector<std::string> tokens((std::istream_iterator<std::string>(iss)), std::istream_iterator<std::string>());
+  std::string token;
+  std::vector<std::string> tokens;
+  while(iss >> token) {
+    tokens.push_back(token);
+  }
 
   if (tokens.size() < 4 || tokens[3] != "0") {
     return nullptr;
