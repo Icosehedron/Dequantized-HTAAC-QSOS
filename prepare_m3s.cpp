@@ -6,6 +6,7 @@
 #include <vector>
 #include "sparse_tensor.hpp"
 
+//const std::string path_to_cnf = "./gen_max3sat/v3c1.cnf";
 const std::string path_to_cnf = "./imported_cnfs/Max3Sat_2016/s3v110c700-1.cnf";
 const std::string path_to_problem = "./problem/";
 
@@ -67,7 +68,7 @@ int get_max(int num_clauses, int** max3sat){
 }
 
 std::tuple<int, SparseTensor*, int, SparseTensor*> generate_8W_mat(int n, int num_clauses, int** max3sat){
-  int w_plus = 7*num_clauses; //The contribution is exactly 7/8 for every clause
+  int w_plus = 6*num_clauses; //The contribution is exactly 6/8 for every clause
   SparseTensor* w_minus = new SparseTensor(n+1, 2);
   int W_plus = num_clauses; //The contribution is exactly 1/8 for every clause
   SparseTensor* W_minus = new SparseTensor(n+1, 4);

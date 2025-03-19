@@ -14,7 +14,12 @@
         "${fileDirname}/${fileBasenameNoExtension}",
         "-framework",
         "Accelerate",
-        "-DACCELERATE_NEW_LAPACK"
+        "-DACCELERATE_NEW_LAPACK",
+        "-I", "/opt/homebrew/Cellar/boost/1.87.0_1/include",
+        "-L", "/opt/homebrew/Cellar/boost/1.87.0_1/lib",
+        "-lboost_system",
+        "-lboost_iostreams",
+        "-lboost_filesystem"
       ],
       "options": {
         "cwd": "${fileDirname}"

@@ -4,8 +4,8 @@
 #include "Xorshift32.hpp"
 
 Xorshift32 rng(12345);
-const int num_var = 20;
-const int num_clauses = 600;
+const int num_var = 3;
+const int num_clauses = 1;
 
 int* generate_clause(int num_var){
   int* clause = new int[3];

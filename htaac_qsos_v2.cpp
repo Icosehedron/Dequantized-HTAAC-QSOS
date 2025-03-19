@@ -5,23 +5,24 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include <filesystem>
 #include "sparse_tensor.hpp"
 #include "gate_set.hpp"
+#include "gnuplot-iostream.h"
 
 const std::string name = "./problem/"; //Path to the problem folder (./problem/)
+const std::string diagram_name = "s3v110c700-1";
 
 //Hyperparameters for simulation
-const int number_of_epochs = 10000; //number of epochs per simulation, you can play with this
-const int epochs_between_reports = 200;
+const int number_of_epochs = 100; //number of epochs per simulation, you can play with this
+const int epochs_between_reports = 99;
 const int number_of_repetitions = 1; //number of repetitions of experiment (full runs). At first, you probably just want 1, but crank it up to more reps to compare an ensemble of random initializations and get general understanding
 
 //Circuit hyperparameters
 const int gate_repetitions = 3; //how many time to repeat the [sequence of n(n-1)/2 Lie generators of SO(n)]
 
 //Graph hyperparameters;
-const int max_paulis = 3; //Maximum length of the Pauli string: the higher the stronger the constraint.
-const float coeff_base = 1.0f; // size of coefficient. Bigger makes us enforce the constraints harder. You will want to tune this.
-const float reg = 0.6f; // regularizes the strength of population balancing term. Bigger makes us regulate less. You will want to tune this.
+const float coeff_base = 0.1f; // size of coefficient. Bigger makes us enforce the constraints harder. You will want to tune this.
 
 //Reads one line of the CNF input (stored in the problem folder)
 int* checkCNFLine(const std::string& line) {
@@ -71,31 +72,6 @@ std::tuple<std::string, int, int, int, int**> parseParamFile(const std::string& 
   return std::make_tuple(path_to_cnf, temp_num_clauses, w_plus, W_plus, arr);
 }
 
-//Loads in the population data
-int* parsePopulationFile(const std::string& fileName, int size) { 
-  std::ifstream file(fileName);
-
-  if (!file.is_open()) {
-    std::cerr << "Could not open the file: " << fileName << std::endl;
-    return nullptr;
-  }
-
-  std::string line;
-  std::getline(file, line);
-
-  std::istringstream iss(line);
-  std::string token;
-
-  int* result = new int[size];
-  for (int i = 0; i < size; ++i) {
-    iss >> token;
-    result[i] = std::stoi(token);
-  }
-
-  file.close();
-  return result;
-}
-
 int get_max(int num_clauses, int** max3sat){
   int max = 0;
   for(int i = 0; i < num_clauses; i++){
@@ -105,15 +81,6 @@ int get_max(int num_clauses, int** max3sat){
     }
   }
   return max;
-}
-
-std::vector<int> generatePaulis(int num_qubits, int max_paulis) {
-  std::vector<int> result;
-  int max_value = 1 << num_qubits;
-  for (int i = 1; i < max_value; i++) {
-    if (__builtin_popcount(i) <= max_paulis) {result.push_back(i);}
-  }
-  return result;
 }
 
 std::pair<int*, int*> synthesizeCZs(int num_qubits, int num_dim) {
@@ -150,8 +117,8 @@ int main() {
   std::tuple<std::string, int, int, int, int**> params = parseParamFile(name + "parameters.txt");
   std::string path_to_cnf = std::get<0>(params); //Path to the original CNF file
   int num_clauses = std::get<1>(params); //Number of clauses in the CNF
-  int w_plus = std::get<2>(params); //Constant w_plus value (equal to num_clauses)
-  int W_plus = std::get<3>(params); //Constant W_plus value (equal to 7 * num_clauses)
+  int w_plus = std::get<2>(params); //Constant 8*w_plus value (equal to num_clauses)
+  int W_plus = std::get<3>(params); //Constant 8*W_plus value (equal to 6 * num_clauses)
   int** max3sat = std::get<4>(params); //Max3Sat instance
   if(max3sat == nullptr){return 1;}
 
@@ -176,31 +143,7 @@ int main() {
   std::cout << "Number of qubits: " << num_qubits << std::endl;
   std::cout << "Number of variables: " << num_var << std::endl;
   std::cout << "Number of clauses: " << num_clauses << std::endl << std::endl;
-
-  std::vector<int> pauliList = generatePaulis(num_qubits, max_paulis);
-  int num_paulis = pauliList.size();
-  float coeff = coeff_base / num_paulis;
-
-  //Read in the populations
-  int* populations = parsePopulationFile(name + "populations.txt", num_Var);
-  if(populations == nullptr){return 1;}
-
-  //Synthesize the population-based unitary
-  int max_population = *std::max_element(populations, populations + num_Var);
-  float* penalties = new float[num_dim];
-  for(int i = 0; i<num_dim; i++){
-
-    /**********************************************
-    *                   NOTE:                     *
-    *    I flipped the sign of the i >= num_Var   *
-    *      case, since it seemed all of the       *
-    *      population was getting lost there      *
-    **********************************************/
-
-    penalties[i] = i < num_Var ? (populations[i] - max_population)/reg : max_population/reg;
-  }
   std::cout << std::endl;
-  delete[] populations;
 
   //Create storage for scores and loss
   float** rounded_scores = new float*[number_of_repetitions];
@@ -214,6 +157,8 @@ int main() {
   std::pair<int*, int*> CZ = synthesizeCZs(num_qubits, num_dim);
   int* CZ0 = CZ.first;
   int* CZ1 = CZ.second;
+
+  float coeff = coeff_base * num_Var * num_Var;
 
   for(int rep = 0; rep < number_of_repetitions; rep++){
     std::cout << "Repetition " << rep << ": ____________________________________________________" << std::endl;
@@ -235,30 +180,19 @@ int main() {
         ensureNormalization(state, num_dim);
       }
 
-      float* pauli_expectations = new float[num_paulis];
-
-      //Calculate the penalty for deviating from the Pauli string conditions
-      float pauli_loss = 0;
-      for(int i = 0; i<num_paulis; i++){
-        int pauli = pauliList[i];
-        float expectation_of_pauli_string = 0;
-        for(int j = 0; j<num_dim; j++){
-          expectation_of_pauli_string += __builtin_popcount(pauli ^ j) % 2 == 0 ? state[j]*state[j] : -state[j]*state[j];
-        }
-        pauli_expectations[i] = expectation_of_pauli_string;
-        pauli_loss += expectation_of_pauli_string * expectation_of_pauli_string;
+      //Calculate the penalty for deviating from the equal superposition
+      float contraint_loss = 0;
+      for(int i = 0; i<num_Var; i++){
+        float deviation = state[i] * state[i] - 1.0f/num_Var;
+        contraint_loss += deviation * deviation;
       }
 
       //Calculate the loss from w_minus, W_minus, and the population balancing term
       float w_minus_loss = w_minus->contract_2D(state);
       float W_minus_loss = W_minus->contract_4D(state);
 
-      float population_loss = 0;
-      for(int i = 0; i<num_dim; i++){
-        population_loss += penalties[i] * state[i] * state[i];
-      }
-      float proper_loss = w_minus_loss + W_minus_loss + population_loss;
-      float loss = proper_loss + coeff * pauli_loss;
+      float proper_loss = w_minus_loss + W_minus_loss;
+      float loss = proper_loss + coeff * contraint_loss;
       loss_scores[rep][epoch] = loss;
 
       //Calculate unrounded score
@@ -268,11 +202,11 @@ int main() {
       //Round the solution and calculate rounded score
       float* rounded_state = new float[num_dim];
       for(int i = 0; i<num_dim; i++){
-        rounded_state[i] = i < num_Var ? (state[i] >= 0.0f ? 1.0f/sqrt(num_Var) : -1.0f/sqrt(num_Var)) : 0.0f;
+        rounded_state[i] = i < num_Var ? (state[i] >= 0.0f ? 1.0f : -1.0f) : 0.0f;
       }
       float w_minus_rounded_loss = w_minus->contract_2D(rounded_state, false);
       float W_minus_rounded_loss = W_minus->contract_4D(rounded_state, false);
-      float rounded_score = (w_plus - w_minus_rounded_loss * num_Var + W_plus - W_minus_rounded_loss * num_Var * num_Var)/8;
+      float rounded_score = (w_plus - w_minus_rounded_loss + W_plus - W_minus_rounded_loss)/8;
       delete[] rounded_state;
       rounded_scores[rep][epoch] = rounded_score;
 
@@ -280,18 +214,10 @@ int main() {
       float* gradients = new float[num_dim];
       std::fill(gradients, gradients + num_dim, 0.0f);
 
-      //Account from the gradient on the output state from Pauli string penalties
-      for(int i = 0; i<num_paulis; i++){
-        int pauli = pauliList[i];
-        float expectation_of_pauli_string = pauli_expectations[i];
-        for(int j = 0; j<num_dim; j++){
-          gradients[j] += (__builtin_popcount(pauli ^ j) % 2 == 0 ? 2 * state[j] : -2 * state[j]) * 2 * expectation_of_pauli_string * coeff;
-        }
-      }
-
-      //Account from the gradient on the output state from population-based penalties
-      for(int i = 0; i<num_dim; i++){
-        gradients[i] += 2 * penalties[i] * state[i];
+      //Account from the gradient on the output state from contraint-based penalties
+      for(int i = 0; i<num_Var; i++){
+        float deviation = state[i] * state[i] - 1.0f/num_Var;
+        gradients[i] += 4 * coeff * deviation * state[i];
       }
 
       //Account from the gradient on the output state from w_minus and W_minus
@@ -308,12 +234,11 @@ int main() {
         std::cout << "Epoch number: " << epoch << std::endl;
         std::cout << "State: " << state[0] << " " << state[1] << " " << state[2] << " " << state[3] << std::endl;
         std::cout << "HTAACQSOS (unrounded): " << unrounded_score << std::endl;
-        std::cout << "HTAACQSOS (rounded): " << rounded_score << std::endl;
-        std::cout << "Pure Loss: " << loss << " (= " << w_minus_loss << " + " << W_minus_loss << " + " << population_loss << " + " << (coeff * pauli_loss) << ")" << std::endl;
+        std::cout << "HTAACQSOS (rounded): " << rounded_score << " of " << num_clauses << " clauses satisfied." << std::endl;
+        std::cout << "Pure Loss: " << loss << " (= " << w_minus_loss << " + " << W_minus_loss << " + " << contraint_loss << ")" << std::endl;
         std::cout << std::endl;
       }
 
-      delete[] pauli_expectations;
       delete[] gradients;
       delete[] state;
     }
@@ -324,7 +249,50 @@ int main() {
     circuit.clear();
   }
 
-  //Plot performance
+  std::filesystem::create_directory("./saved_figures/");
+  std::filesystem::create_directory("./saved_figures/" + diagram_name + "/");
+
+  Gnuplot gp;
+  gp << "set terminal pngcairo enhanced font 'Arial,12' size 800,600\n";
+  gp << "set key off\n";
+
+  std::vector<std::pair<int, float>> points;
+
+  for(int i = 0; i < number_of_epochs; i++){
+    points.push_back(std::make_pair(i, loss_scores[0][i]));
+  }
+  gp << "set title 'Loss over Epochs'\n";
+  gp << "set output './saved_figures/" << diagram_name << "/loss_over_epochs.png'\n";
+  gp << "set xlabel 'Epochs'\n";
+  gp << "set ylabel 'Loss'\n";
+  gp << "plot '-' with linespoints lw 2 lc 'blue'\n";
+  gp.send1d(points);
+  points.clear();
+  points.shrink_to_fit();
+
+  for(int i = 0; i < number_of_epochs; i++){
+    points.push_back(std::make_pair(i, rounded_scores[0][i]));
+  }
+  gp << "set title 'Rounded HTAAC-QSOS Solution'\n";
+  gp << "set output './saved_figures/" << diagram_name << "/rounded_sol_over_epochs.png'\n";
+  gp << "set xlabel 'Epochs'\n";
+  gp << "set ylabel 'Satisfied'\n";
+  gp << "plot '-' with linespoints lw 2 lc 'blue'\n";
+  gp.send1d(points);
+  points.clear();
+  points.shrink_to_fit();
+
+  for(int i = 0; i < number_of_epochs; i++){
+    points.push_back(std::make_pair(i, unrounded_scores[0][i]));
+  }
+  gp << "set title 'Unrounded HTAAC-QSOS Solution'\n";
+  gp << "set output './saved_figures/" << diagram_name << "/unrounded_sol_over_epochs.png'\n";
+  gp << "set xlabel 'Epochs'\n";
+  gp << "set ylabel 'Satisfied'\n";
+  gp << "plot '-' with linespoints lw 2 lc 'blue'\n";
+  gp.send1d(points);
+  points.clear();
+  points.shrink_to_fit();
 
   return 0;
 }
