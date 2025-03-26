@@ -7,7 +7,7 @@
 #include "sparse_tensor.hpp"
 
 //const std::string path_to_cnf = "./gen_max3sat/v3c1.cnf";
-const std::string path_to_cnf = "./imported_cnfs/Max3Sat_2016/s3v110c700-1.cnf";
+const std::string path_to_cnf = "./imported_cnfs/Max3Sat_2016/s3v110c700-2.cnf";
 const std::string path_to_problem = "./problem/";
 
 int* checkCNFLine(const std::string& line) {

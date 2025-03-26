@@ -10,11 +10,9 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include <chrono>
-#include <filesystem>
 #include "sparse_tensor.hpp"
 #include "gate_set.hpp"
-#include "gnuplot-iostream.h"
+#include "graph_results.hpp"
 
 const std::string name = "./problem/"; //Path to the problem folder (./problem/)
 const std::string diagram_name = "s3v110c700-1";
@@ -335,50 +333,7 @@ int main() {
     circuit.clear();
   }
 
-  std::filesystem::create_directory("./saved_figures/");
-  std::filesystem::create_directory("./saved_figures/" + diagram_name + "/");
-
-  Gnuplot gp;
-  gp << "set terminal pngcairo enhanced font 'Arial,12' size 800,600\n";
-  gp << "set key off\n";
-
-  std::vector<std::pair<int, float>> points;
-
-  for(int i = 0; i < number_of_epochs; i++){
-    points.push_back(std::make_pair(i, loss_scores[0][i]));
-  }
-  gp << "set title 'Loss over Epochs'\n";
-  gp << "set output './saved_figures/" << diagram_name << "/loss_over_epochs.png'\n";
-  gp << "set xlabel 'Epochs'\n";
-  gp << "set ylabel 'Loss'\n";
-  gp << "plot '-' with linespoints lw 2 lc 'blue'\n";
-  gp.send1d(points);
-  points.clear();
-  points.shrink_to_fit();
-
-  for(int i = 0; i < number_of_epochs; i++){
-    points.push_back(std::make_pair(i, rounded_scores[0][i]));
-  }
-  gp << "set title 'Rounded HTAAC-QSOS Solution'\n";
-  gp << "set output './saved_figures/" << diagram_name << "/rounded_sol_over_epochs.png'\n";
-  gp << "set xlabel 'Epochs'\n";
-  gp << "set ylabel 'Satisfied'\n";
-  gp << "plot '-' with linespoints lw 2 lc 'blue'\n";
-  gp.send1d(points);
-  points.clear();
-  points.shrink_to_fit();
-
-  for(int i = 0; i < number_of_epochs; i++){
-    points.push_back(std::make_pair(i, unrounded_scores[0][i]));
-  }
-  gp << "set title 'Unrounded HTAAC-QSOS Solution'\n";
-  gp << "set output './saved_figures/" << diagram_name << "/unrounded_sol_over_epochs.png'\n";
-  gp << "set xlabel 'Epochs'\n";
-  gp << "set ylabel 'Satisfied'\n";
-  gp << "plot '-' with linespoints lw 2 lc 'blue'\n";
-  gp.send1d(points);
-  points.clear();
-  points.shrink_to_fit();
+  graph_results(diagram_name, number_of_repetitions, number_of_epochs, rounded_scores, unrounded_scores, loss_scores);
 
   return 0;
 }

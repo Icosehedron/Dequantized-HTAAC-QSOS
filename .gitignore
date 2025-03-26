@@ -2,7 +2,11 @@
 .DS_Store
 
 # Ignore debug symbol files
+*.dSYM/
 *.dSYM
+
+# Ignore figures
+saved_figures/
 
 # Ignore CMake build directories
 build/

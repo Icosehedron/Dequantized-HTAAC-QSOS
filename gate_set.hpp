@@ -5,7 +5,6 @@
 #include <iostream>
 #include <algorithm>
 #include "Xorshift32.hpp"
-#include "/opt/homebrew/Cellar/eigen/3.4.0_1/include/eigen3/Eigen/Dense"
 
 //Hyperparameters for optimizer (Adam)
 const float adam_lr_base = 0.001; //Learning rate

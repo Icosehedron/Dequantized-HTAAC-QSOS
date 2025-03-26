@@ -8,23 +8,26 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <chrono>
 #include "sparse_tensor.hpp"
 #include "gate_set.hpp"
 #include "graph_results.hpp"
 
 const std::string name = "./problem/"; //Path to the problem folder (./problem/)
-const std::string diagram_name = "s3v110c700-1";
+const std::string diagram_name = "s3v110c700-1-testing-20";
 
 //Hyperparameters for simulation
 const int number_of_epochs = 200; //number of epochs per simulation, you can play with this
 const int epochs_between_reports = -1; //Set to -1 to turn off reports
-const int number_of_repetitions = 1; //number of repetitions of experiment (full runs). At first, you probably just want 1, but crank it up to more reps to compare an ensemble of random initializations and get general understanding
+const int number_of_repetitions = 2000; //number of repetitions of experiment (full runs). At first, you probably just want 1, but crank it up to more reps to compare an ensemble of random initializations and get general understanding
 
 //Circuit hyperparameters
 const int gate_repetitions = 3; //how many time to repeat the [sequence of n(n-1)/2 Lie generators of SO(n)]
 
 //Graph hyperparameters;
 const float coeff_base = 0.1f; // size of coefficient. Bigger makes us enforce the constraints harder. You will want to tune this.
+const float anneal_a0 = 0.49f;
+const float anneal_a1 = 0.72f;
 
 //Reads one line of the CNF input (stored in the problem folder)
 int* checkCNFLine(const std::string& line) {
@@ -134,8 +137,13 @@ int main() {
   for(int i = 0; i < number_of_repetitions; i++){unrounded_scores[i] = new float[number_of_epochs];}
   float** loss_scores = new float*[number_of_repetitions];
   for(int i = 0; i < number_of_repetitions; i++){loss_scores[i] = new float[number_of_epochs];}
+  float** constraint_scores = new float*[number_of_repetitions];
+  for(int i = 0; i < number_of_repetitions; i++){constraint_scores[i] = new float[number_of_epochs];}
 
   float coeff = coeff_base * num_Var * num_Var;
+
+  // Start timing
+  auto start_time = std::chrono::high_resolution_clock::now();
 
   for(int rep = 0; rep < number_of_repetitions; rep++){
     if(epochs_between_reports > 0){
@@ -148,7 +156,10 @@ int main() {
       circuit.push_back(new RotationLayer(num_Var, gate_repetitions));
     }
 
-    for(int epoch; epoch < number_of_epochs; epoch++){
+    for(int epoch = 0; epoch < number_of_epochs; epoch++){
+      float rep_factor = (float) (rep * 4) / number_of_repetitions - 2;
+      float epoch_factor = (float) epoch / number_of_epochs;
+      float anneal_factor = anneal_a0 + anneal_a1 * epoch_factor;
       //Initialize state
       float* state = new float[num_Var];
       std::fill(state, state + num_Var, 1.0f / std::sqrt(num_Var));
@@ -165,13 +176,14 @@ int main() {
         float deviation = state[i] * state[i] - 1.0f/num_Var;
         contraint_loss += deviation * deviation;
       }
+      constraint_scores[rep][epoch] = contraint_loss;
 
       //Calculate the loss from w_minus, W_minus, and the population balancing term
       float w_minus_loss = w_minus->contract_2D(state);
       float W_minus_loss = W_minus->contract_4D(state);
 
-      float proper_loss = w_minus_loss + W_minus_loss;
-      float loss = proper_loss + coeff * contraint_loss;
+      float proper_loss = w_minus_loss * num_Var + W_minus_loss * num_Var * num_Var;
+      float loss = proper_loss/8 + coeff * anneal_factor * contraint_loss;
       loss_scores[rep][epoch] = loss;
 
       //Calculate unrounded score
@@ -181,7 +193,7 @@ int main() {
       //Round the solution and calculate rounded score
       float* rounded_state = new float[num_Var];
       for(int i = 0; i<num_Var; i++){
-        rounded_state[i] = state[i] >= 0.0f ? 1.0f : -1.0f;
+        rounded_state[i] = state[i] > 0.0f ? 1.0f : -1.0f;
       }
       float w_minus_rounded_loss = w_minus->contract_2D(rounded_state, false);
       float W_minus_rounded_loss = W_minus->contract_4D(rounded_state, false);
@@ -196,12 +208,18 @@ int main() {
       //Account from the gradient on the output state from contraint-based penalties
       for(int i = 0; i<num_Var; i++){
         float deviation = state[i] * state[i] - 1.0f/num_Var;
-        gradients[i] += 4 * coeff * deviation * state[i];
+        gradients[i] += 4 * coeff * anneal_factor * deviation * state[i];
       }
 
       //Account from the gradient on the output state from w_minus and W_minus
-      w_minus->back_contract_2D(gradients, num_Var/8);
-      W_minus->back_contract_4D(gradients, num_Var * num_Var/8);
+      if(rep_factor > 0){
+        w_minus->back_contract_2D(gradients, num_Var/8);
+        W_minus->back_contract_4D(gradients, num_Var * num_Var/8);
+      }
+      else{
+        w_minus->back_contract_2D(gradients, num_Var/8);
+        W_minus->back_contract_4D(gradients, num_Var * 1/8);
+      }
 
       //Backpropogate through the variational circuit
       for(int i = gate_repetitions - 1; i >= 0; i--){
@@ -217,7 +235,6 @@ int main() {
         std::cout << "Pure Loss: " << loss << " (= " << w_minus_loss << " + " << W_minus_loss << " + " << contraint_loss << ")" << std::endl;
         std::cout << std::endl;
       }
-
       delete[] gradients;
       delete[] state;
     }
@@ -226,9 +243,14 @@ int main() {
       delete circuit[i];
     }
     circuit.clear();
+    circuit.shrink_to_fit();
   }
 
-  graph_results(diagram_name, number_of_repetitions, number_of_epochs, rounded_scores, unrounded_scores, loss_scores);
+  // End timing
+  auto end_time = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> elapsed_time = end_time - start_time;
+
+  graph_results(diagram_name, number_of_repetitions, number_of_epochs, rounded_scores, unrounded_scores, loss_scores, constraint_scores, elapsed_time.count(), true);
 
   return 0;
 }
