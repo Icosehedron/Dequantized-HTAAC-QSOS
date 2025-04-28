@@ -7,6 +7,7 @@
 
 # Ignore figures
 saved_figures/
+archived_figures/
 
 # Ignore CMake build directories
 build/

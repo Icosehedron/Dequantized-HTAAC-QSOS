@@ -11,16 +11,16 @@
 #include <vector>
 #include <chrono>
 #include "sparse_tensor.hpp"
-#include "torus_model.hpp"
+#include "torus_mixture.hpp"
 #include "graph_results.hpp"
 
 const std::string name = "./problem/"; //Path to the problem folder (./problem/)
-const std::string diagram_name = "s3v110c700-2-testing-25";
+const std::string diagram_name = "s3v110c700-2-testing-17";
 
 //Hyperparameters for simulation
-const int number_of_epochs = 1000; //number of epochs per simulation, you can play with this
+const int number_of_epochs = 600; //number of epochs per simulation, you can play with this
 const int epochs_between_reports = -1; //Set to -1 to turn off reports
-const int number_of_repetitions = 200; //number of repetitions of experiment (full runs). At first, you probably just want 1, but crank it up to more reps to compare an ensemble of random initializations and get general understanding
+const int number_of_repetitions = 2000; //number of repetitions of experiment (full runs). At first, you probably just want 1, but crank it up to more reps to compare an ensemble of random initializations and get general understanding
 
 //Reads one line of the CNF input (stored in the problem folder)
 int* checkCNFLine(const std::string& line) {
@@ -131,7 +131,7 @@ int main() {
 
     float rep_factor = (float) (rep * 4) / number_of_repetitions - 2;
 
-    TorusModel* circuit = new TorusModel(num_Var, true);
+    TorusModel* circuit = new TorusModel(num_Var, false);
 
     for(int epoch = 0; epoch < number_of_epochs; epoch++){
       float epoch_factor = (float) epoch / number_of_epochs;

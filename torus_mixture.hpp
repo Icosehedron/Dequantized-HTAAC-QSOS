@@ -1,5 +1,5 @@
-#ifndef TORUS_MODEL_HPP
-#define TORUS_MODEL_HPP
+#ifndef TORUS_MIXTURE_HPP
+#define TORUS_MIXTURE_HPP
 
 #include <iostream>
 #include <algorithm>
@@ -11,7 +11,7 @@
 float initialization_range = 0.06f;
 
 //Hyperparameters for optimizer (Adam)
-const float adam_lr_base = 0.003f; //Learning rate
+const float adam_lr_base = 0.01f; //Learning rate
 const float adam_beta_1 = 0.9f; //Adam default decay rate for momentum
 const float adam_beta_2 = 0.999f; //Adam default decay rate for variance
 
@@ -33,9 +33,7 @@ struct TorusModel{
     float* output;
     float* sin_output;
     float* cos_output;
-    float* post_gradients;
-    float* post_post_gradients;
-    float* flip_array;
+    float* output_gradients;
 
     float* adam_momentum;
     float* adam_variance;
@@ -64,20 +62,17 @@ struct TorusModel{
     DenseVector_Float input_bw;
     DenseVector_Float output_bw;
   public:
-    TorusModel(int num_Var, bool allow_degree_2 = true, bool use_qsos = true)
+    TorusModel(int num_Var, bool allow_degree_2 = true)
       : num_Var(num_Var), allow_degree_2(allow_degree_2) {
       num_parameters = allow_degree_2 ? num_Var * num_Var : num_Var;
-      proper_lr = use_qsos ? adam_lr_base * num_Var / num_parameters : 0.0f;
+      proper_lr = adam_lr_base * num_Var / num_parameters;
 
       parameters = new float[num_parameters];
       gradients = new float[num_parameters];
       output = new float[num_Var];
       sin_output = new float[num_Var];
       cos_output = new float[num_Var];
-      post_gradients = new float[num_Var];
-      post_post_gradients = new float[num_Var];
-      flip_array = new float[num_Var];
-      std::fill(flip_array, flip_array + num_Var, 1.0f);
+      output_gradients = new float[num_Var];
 
       adam_momentum = new float[num_parameters];
       adam_variance = new float[num_parameters];
@@ -87,18 +82,10 @@ struct TorusModel{
       std::fill(adam_momentum, adam_momentum + num_parameters, 0.0f);
       std::fill(adam_variance, adam_variance + num_parameters, 0.0f);
 
-      if(use_qsos){
-        float initialization_factor = initialization_range * std::sqrt((float) num_Var / num_parameters * 3.0f);
-        for(int i = 0; i<num_parameters; i++){
-          parameters[i] = (rng.next_double() * 2.0f - 1.0f) * initialization_factor;
-        }
+      float initialization_factor = initialization_range * std::sqrt((float) num_Var / num_parameters * 3.0f);
+      for(int i = 0; i<num_parameters; i++){
+        parameters[i] = (rng.next_double() * 2.0f - 1.0f) * initialization_factor;
       }
-      else{
-        for(int i = 0; i<num_parameters; i++){
-          parameters[i] = (rng.next_double() < 0.5 ? 1.0f : -1.0f) * M_PI_2; // Randomly assign pi/2 or -pi/2
-        }
-      }
-      
 
       for(int i = 0; i < num_Var; i++){
         directory_first.push_back(i);
@@ -193,7 +180,7 @@ struct TorusModel{
       });
 
       backward = SparseMatrix_Float({.structure = backward_structure, .data = values_bw.data()});
-      input_bw = DenseVector_Float({.count = num_Var, .data = post_gradients});
+      input_bw = DenseVector_Float({.count = num_Var, .data = output_gradients});
       output_bw = DenseVector_Float({.count = num_parameters, .data = gradients});
     }
     ~TorusModel() {
@@ -202,26 +189,22 @@ struct TorusModel{
       delete[] output;
       delete[] cos_output;
       delete[] sin_output;
-      delete[] post_gradients;
-      delete[] post_post_gradients;
-      delete[] flip_array;
+      delete[] output_gradients;
       delete[] adam_momentum;
       delete[] adam_variance;
       delete[] gradients_squared;
       delete[] adam_momentum_corrected;
       delete[] adam_variance_corrected;
     }
-    float* feed_forward(){
+    std::pair<float*, float*> feed_forward_pair(){
       SparseMultiply(forward, input_fw, output_fw);
       vvcosf(cos_output, output, &num_Var);
       vvsinf(sin_output, output, &num_Var);
-      vDSP_vmul(sin_output, 1, flip_array, 1, sin_output, 1, num_Var);
-      return sin_output;
+      return std::make_pair(sin_output, cos_output);
     }
-    void back_propagate(float* post_post_g){
-      std::copy(post_post_g, post_post_g + num_Var, post_post_gradients);
-      vDSP_vmul(post_post_gradients, 1, flip_array, 1, post_post_gradients, 1, num_Var);
-      vDSP_vmul(post_post_gradients, 1, cos_output, 1, post_gradients, 1, num_Var);
+    void back_propagate(float* grad_of_sin_output, float* grad_of_cos_output){
+      vDSP_vmul(grad_of_cos_output, 1, sin_output, 1, output_gradients, 1, num_Var);
+      vDSP_vmsb(grad_of_sin_output, 1, cos_output, 1, output_gradients, 1, output_gradients, 1, num_Var);
       SparseMultiply(backward, input_bw, output_bw);
     }
     void update_parameters(){
@@ -240,19 +223,6 @@ struct TorusModel{
       for(int i = 0; i<num_parameters; i++){
         parameters[i] -= proper_lr * adam_momentum_corrected[i] / (std::sqrt(adam_variance_corrected[i]) + 1e-8);
       }
-    }
-    void reset_gradients(){
-      std::fill(adam_momentum, adam_momentum + num_parameters, 0.0f);
-      std::fill(adam_variance, adam_variance + num_parameters, 0.0f);
-      num_updates = 0;
-    }
-    void flip_parameters(bool* flip){
-      for(int i = 0; i<num_Var; i++){
-        if(flip[i]){
-          flip_array[i] = -flip_array[i];
-        }
-      }
-      reset_gradients();
     }
 };
 

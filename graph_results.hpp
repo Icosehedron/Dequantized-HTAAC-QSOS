@@ -7,21 +7,28 @@
 #include <filesystem>
 #include "gnuplot-iostream.h"
 
-void graph_results(std::string diagram_name, int number_of_reps, int number_of_epochs, float** rounded_scores, float** unrounded_scores, float** loss_scores, float** constraint_scores = nullptr, double elapsed_time = 0.0, bool compare = false){
+void graph_results(std::string diagram_name, int number_of_reps, int number_of_epochs, float** rounded_scores, float** unrounded_scores, float** loss_scores, float** constraint_scores = nullptr, double elapsed_time = 0.0, bool compare = false, int execution_mode = 0){
   std::filesystem::create_directory("./saved_figures/");
   std::filesystem::create_directory("./saved_figures/" + diagram_name + "/");
+
+  std::vector<float> best_by_reps;
 
   int best_index = -1;
   float best_score = -1.0f;
   float avg_score = 0.0f;
   for(int i = 0; i<number_of_reps; i++){
+    float rep_best_score = -1.0f;
     for(int j = 0; j<number_of_epochs; j++){
-      if(rounded_scores[i][j] > best_score){
-        best_score = rounded_scores[i][j];
-        best_index = i;
+      if(rounded_scores[i][j] > rep_best_score){
+        rep_best_score = rounded_scores[i][j];
       }
     }
-    avg_score += rounded_scores[i][number_of_epochs-1];
+    if(rep_best_score > best_score){
+      best_index = i;
+      best_score = rep_best_score;
+    }
+    avg_score += rep_best_score;
+    best_by_reps.push_back(rep_best_score);
   }
   avg_score /= number_of_reps;
 
@@ -79,7 +86,7 @@ void graph_results(std::string diagram_name, int number_of_reps, int number_of_e
     int neighborhood = 0;
     for(int j = -20; j <= 20; j++){
       if(i+j >= 0 && i+j < number_of_reps){
-        nearby += rounded_scores[i+j][number_of_epochs - 1];
+        nearby += best_by_reps[i+j];
         neighborhood++;
       }
     }
@@ -167,24 +174,46 @@ void graph_results(std::string diagram_name, int number_of_reps, int number_of_e
     avg_points.shrink_to_fit();
   }
 
-  std::cout << "Best index: " << best_index << " of " << number_of_reps << std::endl;
-  std::cout << "Best rounded score: " << best_score << std::endl;
-  std::cout << "Average rounded score: " << avg_score << std::endl;
-  if(elapsed_time > 0.0){
-    std::cout << "Elapsed time: " << elapsed_time << " seconds" << std::endl;
-  }
-
   std::ofstream file("./saved_figures/" + diagram_name + "/scores.txt");
   if (!file) {
     std::cerr << "Error opening file for writing\n";
     return;
   }
 
+  switch (execution_mode) {
+    case 0:
+      file << "Execution mode: DQSOS\n";
+      break;
+    case 1:
+      file << "Execution mode: DQSOS + Local Search\n";
+      break;
+    case 2:
+      file << "Execution mode: DQSOS + Simulated Annealing\n";
+      break;
+    case 3:
+      file << "Execution mode: DQSOS-guided Local Search\n";
+      break;
+    case 4:
+      file << "Execution mode: DQSOS-guided Simulated Annealing\n";
+      break;
+    case 5:
+      file << "Execution mode: Local Search\n";
+      break;
+    case 6:
+      file << "Execution mode: Simulated Annealing\n";
+      break;
+    default:
+      file << "Execution mode: Unknown\n";
+      break;
+  }
+  
   file << "Best index: " << best_index << " of " << number_of_reps << "\n";
   file << "Best rounded score: " << best_score << "\n";
   file << "Average rounded score: " << avg_score << "\n";
+  file << "Number of epochs: " << number_of_epochs << "\n";
   if(elapsed_time > 0.0){
     file << "Elapsed time: " << elapsed_time << " seconds\n";
+    file << "Time taken to reach best score: " << (elapsed_time/number_of_reps * (best_index + 1)) << " seconds\n";
   }
 
   file.close();

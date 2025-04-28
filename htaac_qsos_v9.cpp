@@ -13,14 +13,21 @@
 #include "sparse_tensor.hpp"
 #include "torus_model.hpp"
 #include "graph_results.hpp"
+#include "Xorshift32.hpp"
 
 const std::string name = "./problem/"; //Path to the problem folder (./problem/)
-const std::string diagram_name = "s3v110c700-2-testing-25";
+const std::string diagram_name = "s3v110c700-2-testing-31";
 
 //Hyperparameters for simulation
-const int number_of_epochs = 1000; //number of epochs per simulation, you can play with this
-const int epochs_between_reports = -1; //Set to -1 to turn off reports
-const int number_of_repetitions = 200; //number of repetitions of experiment (full runs). At first, you probably just want 1, but crank it up to more reps to compare an ensemble of random initializations and get general understanding
+const int number_of_epochs = 6000; //number of epochs per simulation, you can play with this
+const int number_of_repetitions = 100; //number of repetitions of experiment (full runs). At first, you probably just want 1, but crank it up to more reps to compare an ensemble of random initializations and get general understanding
+
+//Mode-specific hyperparameters
+//0 = DQSOS, 1 = DQSOS + LS, 2 = DQSOS + SA, 3 = Local Search, 4 = Simulated Annealing
+const int execution_mode = 1;
+float aggressive_annealing_strength = 1e-4f; //Strength of the annealing process
+
+Xorshift32 sa_rng(33333); //Seeds the simulated annealing process
 
 //Reads one line of the CNF input (stored in the problem folder)
 int* checkCNFLine(const std::string& line) {
@@ -125,16 +132,13 @@ int main() {
   auto start_time = std::chrono::high_resolution_clock::now();
 
   for(int rep = 0; rep < number_of_repetitions; rep++){
-    if(epochs_between_reports > 0){
-      std::cout << "Repetition " << rep << ": ____________________________________________________" << std::endl;
-    }
-
-    float rep_factor = (float) (rep * 4) / number_of_repetitions - 2;
+    float rep_factor = (1 - (float) rep / number_of_repetitions);
+    aggressive_annealing_strength = rep_factor * 1e-4f;
 
     TorusModel* circuit = new TorusModel(num_Var, true);
 
     for(int epoch = 0; epoch < number_of_epochs; epoch++){
-      float epoch_factor = (float) epoch / number_of_epochs;
+      float temperature = (1 - (float) epoch / number_of_epochs) * (float(num_clauses) / 8) * aggressive_annealing_strength;
 
       //Initialize state
       float* state = circuit->feed_forward();
@@ -177,16 +181,58 @@ int main() {
       w_minus->back_contract_2D(gradients);
       W_minus->back_contract_4D(gradients);
 
-      circuit->back_propagate(gradients);
-      circuit->update_parameters();
+      bool flipped = false;
 
-      if(epochs_between_reports > 0 && epoch % epochs_between_reports == 0){
-        std::cout << "Epoch number: " << epoch << std::endl;
-        std::cout << "State: " << state[0] << " " << state[1] << " " << state[2] << " " << state[3] << std::endl;
-        std::cout << "HTAACQSOS (unrounded): " << unrounded_score << std::endl;
-        std::cout << "HTAACQSOS (rounded): " << rounded_score << " of " << num_clauses << " clauses satisfied." << std::endl;
-        std::cout << "Pure Loss: " << loss << " (= " << w_minus_loss << " + " << W_minus_loss << " + " << contraint_loss << ")" << std::endl;
-        std::cout << std::endl;
+      //Apply the local search
+      if(execution_mode >= 1){
+        std::vector<std::pair<float, int>> certainty;
+        for (int i = 0; i < num_Var; i++) {
+          certainty.emplace_back(state[i] > 0.0f ? -gradients[i] : gradients[i], i);
+        }
+        std::sort(certainty.begin(), certainty.end());
+
+        float* experimental_state = new float[num_Var];
+        float best_score = std::numeric_limits<float>::max();
+        bool* best_flips = new bool[num_Var]();
+        for(int i = 0; i<3; i++){
+          for(int j = i; j<3; j++){
+            int first_index = certainty[i].second;
+            int second_index = certainty[j].second;
+
+            std::copy(state, state + num_Var, experimental_state);
+            experimental_state[first_index] = -experimental_state[first_index];
+            if(j != i){experimental_state[second_index] = -experimental_state[second_index];}
+
+            float experimental_score = (w_minus->contract_2D(experimental_state, false) + W_minus->contract_4D(experimental_state, false))/8;
+            if(experimental_score < best_score){
+              best_score = experimental_score;
+              std::copy(experimental_state, experimental_state + num_Var, state);
+              std::fill(best_flips, best_flips + num_Var, false);
+              best_flips[first_index] = true;
+              best_flips[second_index] = true;
+            }
+          }
+        }
+        if(best_score + 1e-8 < loss){
+          flipped = true;
+          circuit->flip_parameters(best_flips);
+        }
+        else if(best_score > loss + 1e-8){
+          if(execution_mode == 2){
+            if(sa_rng.next_double() < std::exp((loss - best_score) / temperature)){
+              flipped = true;
+              circuit->flip_parameters(best_flips);
+            }
+          }
+        }
+
+        delete[] experimental_state;
+        delete[] best_flips;
+      }
+
+      if(!flipped){
+        circuit->back_propagate(gradients);
+        circuit->update_parameters();
       }
 
       delete[] gradients;
@@ -199,7 +245,7 @@ int main() {
   auto end_time = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> elapsed_time = end_time - start_time;
 
-  graph_results(diagram_name, number_of_repetitions, number_of_epochs, rounded_scores, unrounded_scores, loss_scores, constraint_scores, elapsed_time.count(), false);
+  graph_results(diagram_name, number_of_repetitions, number_of_epochs, rounded_scores, unrounded_scores, loss_scores, constraint_scores, elapsed_time.count(), false, execution_mode);
 
   return 0;
 }
