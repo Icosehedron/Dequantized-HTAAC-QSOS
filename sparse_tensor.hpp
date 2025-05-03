@@ -174,6 +174,20 @@ struct SparseTensor {
       std::cout << "input_state: " << input_state[0] << " " << input_state[1] << " " << input_state[2] << " " << input_state[3] << std::endl;
     }
 
+    int* extract_population(){
+      int* population = new int[num_Var];
+      for(int i = 0; i<num_Var; i++){
+        population[i] = 0;
+      }
+      for(int j = 0; j<rank; j++){
+        for(int i = 0; i<values.size(); i++){
+          std::cout << values[i] << " ";
+          population[indices[j][i]] += std::abs(static_cast<int>(values[i]));
+        }
+      }
+      return population;
+    }
+
     // Function to write file
     void writeToFile(const std::string &filename) {
       std::ofstream file(filename);

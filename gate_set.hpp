@@ -7,7 +7,7 @@
 #include "Xorshift32.hpp"
 
 //Hyperparameters for optimizer (Adam)
-const float adam_lr_base = 0.001; //Learning rate
+const float adam_lr_base = 0.003; //Learning rate
 const float adam_beta_1 = 0.9; //Adam default decay rate for momentum
 const float adam_beta_2 = 0.999; //Adam default decay rate for variance
 

@@ -7,7 +7,7 @@
 #include <filesystem>
 #include "gnuplot-iostream.h"
 
-void graph_results(std::string diagram_name, int number_of_reps, int number_of_epochs, float** rounded_scores, float** unrounded_scores, float** loss_scores, float** constraint_scores = nullptr, double elapsed_time = 0.0, bool compare = false, int execution_mode = 0){
+void graph_results(std::string diagram_name, int number_of_reps, int number_of_epochs, float** rounded_scores, float** unrounded_scores, float** loss_scores, float** constraint_scores = nullptr, double elapsed_time = 0.0, bool compare = false, int execution_mode = 0, int smoothing = 20){
   std::filesystem::create_directory("./saved_figures/");
   std::filesystem::create_directory("./saved_figures/" + diagram_name + "/");
 
@@ -84,7 +84,7 @@ void graph_results(std::string diagram_name, int number_of_reps, int number_of_e
     best_points.push_back(std::make_pair(i, rounded_scores[i][number_of_epochs-1]));
     float nearby = 0.0f;
     int neighborhood = 0;
-    for(int j = -20; j <= 20; j++){
+    for(int j = -smoothing; j <= smoothing; j++){
       if(i+j >= 0 && i+j < number_of_reps){
         nearby += best_by_reps[i+j];
         neighborhood++;
@@ -206,7 +206,7 @@ void graph_results(std::string diagram_name, int number_of_reps, int number_of_e
       file << "Execution mode: Unknown\n";
       break;
   }
-  
+
   file << "Best index: " << best_index << " of " << number_of_reps << "\n";
   file << "Best rounded score: " << best_score << "\n";
   file << "Average rounded score: " << avg_score << "\n";

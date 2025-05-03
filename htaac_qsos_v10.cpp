@@ -15,21 +15,21 @@
 #include "Xorshift32.hpp"
 
 const std::string name = "./problem/"; //Path to the problem folder (./problem/)
-const std::string diagram_name = "HG-3SAT-V300-C1200-3-benchmark-6";
+const std::string diagram_name = "fla-450-3_simp-testing-1";
 
 //Hyperparameters for simulation
 int number_of_epochs = 6000; //number of epochs per simulation, you can play with this
-int number_of_repetitions = 1000; //number of repetitions of experiment (full runs). At first, you probably just want 1, but crank it up to more reps to compare an ensemble of random initializations and get general understanding
+int number_of_repetitions = 1; //number of repetitions of experiment (full runs). At first, you probably just want 1, but crank it up to more reps to compare an ensemble of random initializations and get general understanding
 
 //Mode-specific hyperparameters
 //0 = DQSOS, 1 = DQSOS + LS, 2 = DQSOS + SA, 
 //3 = DQSOS-guided LS, 4 = DQSOS-guided SA,
 //5 = Local Search, 6 = Simulated Annealing
-const int execution_mode = 6;
+const int execution_mode = 4;
 float annealing_strength = 10.0f; //Strength of the annealing process
 int annealing_girth = 15; //Girth of the annealing process
 const bool allow_degree_2 = false; //Allow degree 2 variables in the circuit when using DQSOS
-const bool live_time_limit = true;
+const bool live_time_limit = false;
 
 Xorshift32 sa_rng(33333); //Seeds the simulated annealing process
 
@@ -104,7 +104,6 @@ int main() {
 
   int num_var = get_max(num_clauses, max3sat); //Number of variables in the original cnf
   int num_Var = num_var + 1; //Number of variables, including v_0
-  float threshold = std::sqrt(1.0f / num_Var);
 
   //Set up tensors in (sparse) COO format
   SparseTensor* w_minus = new SparseTensor(num_Var, 2);

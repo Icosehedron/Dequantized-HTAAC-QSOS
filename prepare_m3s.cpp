@@ -7,7 +7,7 @@
 #include "sparse_tensor.hpp"
 
 //const std::string path_to_cnf = "./gen_max3sat/v3c1.cnf";
-const std::string path_to_cnf = "./imported_cnfs/Max3Sat_2016/HG-3SAT-V300-C1200-3.cnf";
+const std::string path_to_cnf = "./imported_cnfs/Max3Sat_2016/s3v110c700-2.cnf";
 const std::string path_to_problem = "./problem/";
 
 int* checkCNFLine(const std::string& line) {
@@ -154,12 +154,12 @@ int main() {
   w_minus->writeToFile(path_to_problem + "w_minus_2d.txt");
   W_minus->writeToFile(path_to_problem + "W_minus_4d.txt");
 
+  int* w_population = w_minus->extract_population();
+  int* W_population = W_minus->extract_population();
   int* populations = new int[n+1];
-  populations[0] = n+1;
-  for(int i = 0; i<max3sat.first; i++){
-    for(int j = 0; j<3; j++){
-      populations[std::max(max3sat.second[i][j], -max3sat.second[i][j])] += 1;
-    }
+  for(int i = 0; i<n+1; i++){
+    populations[i] += w_population[i];
+    populations[i] += W_population[i];
   }
 
   writePopulationsToFile(path_to_problem + "populations.txt", populations, n+1);
