@@ -13,24 +13,27 @@
 #include "torus_model.hpp"
 #include "graph_results.hpp"
 #include "quantum_circuit.hpp"
+#include "rotation_circuit.hpp"
+
+const int mode = 8;
 
 const std::string name = "./problem/"; //Path to the problem folder (./problem/)
-const std::string diagram_name = "s3v110c700-2-benchmark-11";
+const std::string diagram_name = "s3v110c700-5-benchmark-"+std::to_string(mode);
 
 //Hyperparameters for simulation
 const int number_of_epochs = 200; //number of epochs per simulation, you can play with this
 int number_of_repetitions = 1; //number of repetitions of experiment (full runs). At first, you probably just want 1, but crank it up to more reps to compare an ensemble of random initializations and get general understanding
 
-const int num_pauli_strings = 0;
-const bool use_population_balancing = false;
-const bool rotation_mode = 2;
+const int num_pauli_strings = (mode - 1) / 2;
+const bool use_population_balancing = (mode % 2 == 0);
+const bool rotation_mode = 1;
 
 //For tuning
 const bool automatic_tuning = false;
 const bool tune_population = false;
-const float lambda_base = 10.0f; //Base strength of pauli loss
-const float beta_base = 1.0f; //Base strength of population balancing
-const float test_scale = 6.0f;
+const float lambda_base = 0.0f; //Base strength of pauli loss N/A, 163.8, 32.0, 26.12
+const float beta_base = 0.0f; //Base strength of population balancing 1.56, 1.8, 1.43, 1.43
+const float test_scale = 3.0f;
 
 //Mode-specific hyperparameters
 float lambda = lambda_base; //Strength of pauli loss
@@ -191,6 +194,23 @@ int main() {
   std::vector<float*> loss_scores;
   std::vector<float*> constraint_scores;
 
+  if(num_pauli_strings == 0){
+    lambda = 0.0f;
+    beta = 1.56f;
+  }
+  else if(num_pauli_strings == 1){
+    lambda = 163.8f;
+    beta = 1.8f;
+  }
+  else if(num_pauli_strings == 2){
+    lambda = 32.0f;
+    beta = 1.43f;
+  }
+  else if(num_pauli_strings == 3){
+    lambda = 26.12f;
+    beta = 1.43f;
+  }
+
   // Start timing
   auto start_time = std::chrono::high_resolution_clock::now();
 
@@ -212,9 +232,13 @@ int main() {
 
     TorusModel* torus_circuit;
     QuantumCircuit* quantum_circuit;
+    RotationCircuit* rotation_circuit;
 
     if(rotation_mode == 0){
       quantum_circuit = new QuantumCircuit(num_qubits, num_Var, CZs.first, CZs.second, 50);
+    }
+    else if(rotation_mode == 1){
+      rotation_circuit = new RotationCircuit(num_Var, 3);
     }
     else if(rotation_mode == 2){
       torus_circuit = new TorusModel(num_Var, allow_degree_2, true);
@@ -230,6 +254,11 @@ int main() {
         state = new float[num_dim];
         std::fill(state, state + num_dim, 1 * std::sqrt(float(num_Var)/float(num_dim)));
         quantum_circuit->feed_forward(state);
+      }
+      else if(rotation_mode == 1){
+        state = new float[num_Var];
+        std::fill(state, state + num_Var, 1.0f);
+        rotation_circuit->feed_forward(state);
       }
       else if(rotation_mode == 2){
         state = torus_circuit->feed_forward();
@@ -312,6 +341,10 @@ int main() {
         quantum_circuit->back_propagate(gradients);
         quantum_circuit->update_parameters();
       }
+      else if(rotation_mode == 1){
+        rotation_circuit->back_propagate(gradients);
+        rotation_circuit->update_parameters();
+      }
       else if(rotation_mode == 2){
         torus_circuit->back_propagate(gradients);
         torus_circuit->update_parameters();
@@ -321,6 +354,7 @@ int main() {
     }
 
     delete quantum_circuit;
+    delete rotation_circuit;
     delete torus_circuit;
     delete[] pauli_losses;
 
@@ -338,7 +372,7 @@ int main() {
   auto end_time = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> elapsed_time = end_time - start_time;
 
-  graph_results(diagram_name, number_of_repetitions, number_of_epochs, rounded_scores.data(), unrounded_scores.data(), loss_scores.data(), constraint_scores.data(), elapsed_time.count(), false, execution_mode, 40);
+  graph_results(diagram_name, number_of_repetitions, number_of_epochs, rounded_scores.data(), unrounded_scores.data(), loss_scores.data(), constraint_scores.data(), elapsed_time.count(), false, execution_mode, 40, mode);
 
   return 0;
 }

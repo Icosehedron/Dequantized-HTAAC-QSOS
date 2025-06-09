@@ -181,7 +181,6 @@ struct SparseTensor {
       }
       for(int j = 0; j<rank; j++){
         for(int i = 0; i<values.size(); i++){
-          std::cout << values[i] << " ";
           population[indices[j][i]] += std::abs(static_cast<int>(values[i]));
         }
       }

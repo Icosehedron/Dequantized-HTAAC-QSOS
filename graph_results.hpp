@@ -7,7 +7,7 @@
 #include <filesystem>
 #include "gnuplot-iostream.h"
 
-void graph_results(std::string diagram_name, int number_of_reps, int number_of_epochs, float** rounded_scores, float** unrounded_scores, float** loss_scores, float** constraint_scores = nullptr, double elapsed_time = 0.0, bool compare = false, int execution_mode = 0, int smoothing = 20){
+void graph_results(std::string diagram_name, int number_of_reps, int number_of_epochs, float** rounded_scores, float** unrounded_scores, float** loss_scores, float** constraint_scores = nullptr, double elapsed_time = 0.0, bool compare = false, int execution_mode = 0, int smoothing = 20, int mode = 0){
   std::filesystem::create_directory("./saved_figures/");
   std::filesystem::create_directory("./saved_figures/" + diagram_name + "/");
 
@@ -81,7 +81,7 @@ void graph_results(std::string diagram_name, int number_of_reps, int number_of_e
   avg_points.shrink_to_fit();
 
   for(int i = 0; i < number_of_reps; i++){
-    best_points.push_back(std::make_pair(i, rounded_scores[i][number_of_epochs-1]));
+    best_points.push_back(std::make_pair(i, best_by_reps[i]));
     float nearby = 0.0f;
     int neighborhood = 0;
     for(int j = -smoothing; j <= smoothing; j++){
@@ -96,7 +96,7 @@ void graph_results(std::string diagram_name, int number_of_reps, int number_of_e
   gp << "set output './saved_figures/" << diagram_name << "/rounded_sol_over_reps.png'\n";
   gp << "set xlabel 'Rep'\n";
   gp << "set ylabel 'Satisfied'\n";
-  gp << "plot '-' with points pt 7 lc 'blue' title 'Final', "
+  gp << "plot '-' with points pt 7 lc 'blue' title 'Best', "
         "'-' with lines lw 2 lc 'red' title 'Average'\n";
   gp.send1d(best_points);
   gp.send1d(avg_points);
@@ -207,6 +207,7 @@ void graph_results(std::string diagram_name, int number_of_reps, int number_of_e
       break;
   }
 
+  file << "Mode: " << mode << "\n";
   file << "Best index: " << best_index << " of " << number_of_reps << "\n";
   file << "Best rounded score: " << best_score << "\n";
   file << "Average rounded score: " << avg_score << "\n";

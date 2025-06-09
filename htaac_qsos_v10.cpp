@@ -15,7 +15,7 @@
 #include "Xorshift32.hpp"
 
 const std::string name = "./problem/"; //Path to the problem folder (./problem/)
-const std::string diagram_name = "fla-450-3_simp-testing-1";
+std::string diagram_name = "HG-3SAT-V300-C1200-5";
 
 //Hyperparameters for simulation
 int number_of_epochs = 6000; //number of epochs per simulation, you can play with this
@@ -25,11 +25,11 @@ int number_of_repetitions = 1; //number of repetitions of experiment (full runs)
 //0 = DQSOS, 1 = DQSOS + LS, 2 = DQSOS + SA, 
 //3 = DQSOS-guided LS, 4 = DQSOS-guided SA,
 //5 = Local Search, 6 = Simulated Annealing
-const int execution_mode = 4;
+int execution_mode = 0;
 float annealing_strength = 10.0f; //Strength of the annealing process
 int annealing_girth = 15; //Girth of the annealing process
 const bool allow_degree_2 = false; //Allow degree 2 variables in the circuit when using DQSOS
-const bool live_time_limit = false;
+const bool live_time_limit = true;
 
 Xorshift32 sa_rng(33333); //Seeds the simulated annealing process
 
@@ -92,7 +92,12 @@ int get_max(int num_clauses, int** max3sat){
   return max;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+  if (argc > 1) {
+    execution_mode = std::stoi(argv[1]);
+    diagram_name = diagram_name + "-" + argv[1];
+  }
+
   //Load in the problem parameters (determined by prepare_m3s.cpp)
   std::tuple<std::string, int, int, int, int**> params = parseParamFile(name + "parameters.txt");
   std::string path_to_cnf = std::get<0>(params); //Path to the original CNF file
